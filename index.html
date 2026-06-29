@@ -291,7 +291,7 @@ nav{display:flex;background:#fff;border-bottom:1px solid #e5e5e5;padding:0 1rem;
 // ============================================================
 //  ตั้งค่า URL ของ Google Apps Script Web App ตรงนี้
 // ============================================================
-var API_URL = 'https://script.google.com/macros/s/AKfycbyS_OcW1QFpePZgBPgMGZvp2Gg7lFlGJ5ZTDzEBjKKMUXqilN07MvxetLO9xLZQzZ4QIg/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbzChbM7c1BNZfbBoYZtEDgjC_9hJqcWTfGiT0aVCs-tjYzY2-mOHIWS3t1Nb6MYyCGGZw/exec';
 
 // ---- API helpers ----
 function apiGet(callback) {
@@ -413,7 +413,25 @@ schY = today.getFullYear(); schM = today.getMonth();
 
 function pad2(n) { return String(n).padStart(2,'0'); }
 function mkDateStr(y,m,d) { return y+'-'+pad2(m+1)+'-'+pad2(d); }
-function toMins(t) { var p=t.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }
+function toMins(t) { if(!t||t.indexOf(':')<0) return 0; var p=t.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }
+
+function parseDate(ds) {
+  if(!ds||typeof ds!=='string') return new Date(NaN);
+  var m=ds.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]),12,0,0);
+  return new Date(NaN);
+}
+function fmtDateTH(ds,opts) {
+  var dt=parseDate(ds);
+  if(isNaN(dt.getTime())) return ds||'-';
+  return dt.toLocaleDateString('th-TH',opts);
+}
+function isDatePast(ds) {
+  var dt=parseDate(ds);
+  if(isNaN(dt.getTime())) return false;
+  var todayMid=new Date(today.getFullYear(),today.getMonth(),today.getDate(),0,0,0);
+  return dt<todayMid;
+}
 function timesOverlap(s1,e1,s2,e2) { return s1<e2 && e1>s2; }
 function getStaffLabel(sid) { var s=STAFF.find(function(x){return x.id==sid;}); return s ? s.t+s.f+' ('+s.n+')' : ''; }
 function getStaffPos(sid) { var s=STAFF.find(function(x){return x.id==sid;}); return s ? s.p : ''; }
@@ -478,8 +496,7 @@ function changeBookCal(dir) {
 function pickDate(ds) {
   pickedDate = ds;
   document.getElementById('sel-date-val').value = ds;
-  var dt = new Date(ds+'T12:00:00');
-  document.getElementById('sel-date-lbl').textContent = 'วันที่เลือก: '+dt.toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('sel-date-lbl').textContent = 'วันที่เลือก: '+fmtDateTH(ds,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('book-err').style.display = 'none';
   renderBookCal();
 }
@@ -516,12 +533,11 @@ function submitBooking() {
     }
     loadAllBookings(function(){
       renderSchCal(); renderBookCal();
-      var dt = new Date(date+'T12:00:00');
       document.getElementById('succ-sum').innerHTML =
         '<div class="sum-row"><span class="sl">ผู้จอง</span><span class="sv">'+getStaffLabel(sid)+'</span></div>'+
         '<div class="sum-row"><span class="sl">ตำแหน่ง</span><span class="sv">'+getStaffPos(sid)+'</span></div>'+
         '<div class="sum-row"><span class="sl">หัวข้อ</span><span class="sv">'+topic+'</span></div>'+
-        '<div class="sum-row"><span class="sl">วันที่</span><span class="sv">'+dt.toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</span></div>'+
+        '<div class="sum-row"><span class="sl">วันที่</span><span class="sv">'+fmtDateTH(date,{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</span></div>'+
         '<div class="sum-row"><span class="sl">เวลา</span><span class="sv">'+st+' – '+et+'</span></div>'+
         '<div class="sum-row"><span class="sl">ห้อง</span><span class="sv">'+ROOMS[room]+'</span></div>';
       document.getElementById('book-form-wrap').style.display = 'none';
@@ -600,8 +616,7 @@ function toggleSchDay(ds) {
 function renderSchDayDetail() {
   var el = document.getElementById('sch-day-detail');
   if(!selectedSchDay){ el.innerHTML=''; return; }
-  var dt = new Date(selectedSchDay+'T12:00:00');
-  var ds2 = dt.toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  var ds2 = fmtDateTH(selectedSchDay,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   var dayBk = bookings.filter(function(b){ return b.date===selectedSchDay && (schRoomFilter==='all'||b.room===schRoomFilter); })
                       .sort(function(a,b){ return toMins(a.startTime)-toMins(b.startTime); });
   var html = '<div class="day-detail"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">'+
@@ -628,16 +643,15 @@ function renderMyBookings() {
     if(!f) return true;
     var s = STAFF.find(function(x){return x.id===b.staffId;});
     return s && (s.f+s.l+s.n).toLowerCase().indexOf(f) >= 0;
-  }).sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
+  }).sort(function(a,b){ return b.date>a.date?1:b.date<a.date?-1:0; });
   var el = document.getElementById('my-list');
   if(!list.length) {
     el.innerHTML = '<div class="empty-st"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-0.125em;font-size:28px;display:block;margin-bottom:8px"><path d="M20 20H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><rect x="8" y="3" width="8" height="4" rx="0"/><path d="M14 5h4a2 2 0 0 1 2 2v3"/><line x1="4" y1="11" x2="16" y2="11"/><line x1="3" y1="3" x2="21" y2="21"/></svg>'+(f?'ไม่พบรายการ':'ยังไม่มีการจอง')+'</div>';
     return;
   }
   el.innerHTML = list.map(function(b) {
-    var dt = new Date(b.date+'T12:00:00');
-    var ds = dt.toLocaleDateString('th-TH',{weekday:'short',month:'short',day:'numeric'});
-    var isPast = dt < today;
+    var ds = fmtDateTH(b.date,{weekday:'short',month:'short',day:'numeric'});
+    var isPast = isDatePast(b.date);
     return '<div class="my-bk-card">'+
       '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">'+
       '<div><div style="font-size:14px;font-weight:600">'+b.topic+'</div>'+
@@ -697,7 +711,7 @@ function pickAdminFilter(f, el) {
 
 function renderAdminList() {
   var list = bookings.filter(function(b){ return adminBookFilter==='all'||b.room===adminBookFilter; })
-                     .sort(function(a,b){ return new Date(a.date+a.startTime)-new Date(b.date+b.startTime); });
+                     .sort(function(a,b){ var ka=a.date+a.startTime,kb=b.date+b.startTime; return ka>kb?1:ka<kb?-1:0; });
   var tot = bookings.length;
   var bigC = bookings.filter(function(b){return b.room==='big';}).length;
   var smC = bookings.filter(function(b){return b.room==='small';}).length;
@@ -708,9 +722,8 @@ function renderAdminList() {
   var el = document.getElementById('admin-list');
   if(!list.length) { el.innerHTML='<div class="empty-st"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-0.125em;font-size:28px;display:block;margin-bottom:8px"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M8 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-2"/><line x1="10" y1="12" x2="14" y2="16"/><line x1="14" y1="12" x2="10" y2="16"/></svg>ยังไม่มีการจอง</div>'; return; }
   el.innerHTML = list.map(function(b) {
-    var dt = new Date(b.date+'T12:00:00');
-    var ds = dt.toLocaleDateString('th-TH',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
-    var isPast = dt < today;
+    var ds = fmtDateTH(b.date,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    var isPast = isDatePast(b.date);
     return '<div class="admin-bk-card">'+
       '<div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+
       '<div><div style="font-size:14px;font-weight:600">'+b.topic+' <span class="badge b-pur" style="font-size:10px">'+(b.room==='big'?'ห้องใหญ่':'ห้องเล็ก')+'</span></div>'+
@@ -775,10 +788,9 @@ function openCancelModal(id) {
   var b = bookings.find(function(x){return x.id===id;});
   if(!b) return;
   pendingCancelId = id;
-  var dt = new Date(b.date+'T12:00:00');
   document.getElementById('cancel-detail-txt').innerHTML =
     '<strong>'+getStaffLabel(b.staffId)+'</strong><br>'+b.topic+'<br>'+
-    dt.toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long'})+' '+b.startTime+'–'+b.endTime+'<br>'+ROOMS[b.room];
+    fmtDateTH(b.date,{weekday:'long',day:'numeric',month:'long'})+' '+b.startTime+'–'+b.endTime+'<br>'+ROOMS[b.room];
   document.getElementById('cancel-modal').style.display = 'flex';
 }
 
